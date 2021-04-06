@@ -27,7 +27,7 @@ TDateTime = TDate + 'T' + TTime
 
 # For Whatsapp chat exports
 WUser = '(- (?P<username>[^:]*):)' # To get the user's name
-WDate = '(?P<date>(?P<month>[0-9]{1,2})[-|\/]{1}(?P<day>[0-9]{1,2})[-|\/]{1}(?P<year>[0-9]{2}))' # To get the date
+WDate = '(?P<date>(?P<day>[0-9]{1,2})[-|\/]{1}(?P<month>[0-9]{1,2})[-|\/]{1}(?P<year>[0-9]{2}))' # To get the date
 WTime = '(, (?P<time>(?P<hour>[0-9]{2}):(?P<minute>[0-9]{2})) )' # To get the time
 WMsg = WDate + WTime + WUser + '(?P<message>.*)' # Finally to get the parsed message
 
@@ -50,7 +50,7 @@ def import_data(path_to_chatfile):
     ]
     '''
     try:
-        f = open(path_to_chatfile, 'r')
+        f = open(path_to_chatfile, encoding='utf-8')
     except:
         print('File not found!!')
         exit()
@@ -83,6 +83,7 @@ def import_data(path_to_chatfile):
                                 'time': datetime.strptime(date_match.groupdict()['time'], '%H:%M:%S').time(),
                                 'hour': date_match.groupdict()['hour'],
                                 'minute': date_match.groupdict()['minute'],
+                                
                             })
 
         return msgs
@@ -96,13 +97,14 @@ def import_data(path_to_chatfile):
         if match:
             msgs.append({
                             'username': match.groupdict()['username'],
-                            'date': datetime.strptime(match.groupdict()['date'], '%m/%d/%y').date(),
+                            'date': datetime.strptime(match.groupdict()['date'], '%d/%m/%y').date(),
                             'month': match.groupdict()['month'],
                             'day': match.groupdict()['day'],
                             'year': match.groupdict()['year'],
                             'time': datetime.strptime(match.groupdict()['time'], '%H:%M').time(),
                             'hour': match.groupdict()['hour'],
                             'minute': match.groupdict()['minute'],
+                            'message': match.groupdict()['message'],
                         })
     f.close()
 
@@ -129,7 +131,7 @@ def find_msg_count(msgs, start_date=None, end_date=None):
     return count
 
 
-def find_freq(msgs, username=None, start_date=None, end_date=None):
+def find_freq(msgs, username=None, start_date=None, end_date=None, minLength=0):
     '''
     Find the frequecy at which a given users messages
     '''
@@ -137,7 +139,8 @@ def find_freq(msgs, username=None, start_date=None, end_date=None):
     for msg in msgs:
         user = msg['username']
         date = msg['date']
-        if not start_date or (start_date and start_date < date < end_date):
+        #print(len(msg['message']));
+        if (not start_date and len(msg['message'])>minLength) or (start_date and start_date < date < end_date ) :
             user_count[user] = user_count[user] + 1 if user in user_count else 1
     if username:
         return user_count[username] if username in user_count else 0
@@ -145,11 +148,11 @@ def find_freq(msgs, username=None, start_date=None, end_date=None):
         return user_count
 
 
-def calc_percentage(msgs, username=None, start_date=None, end_date=None, show_graph=False):
+def calc_percentage(msgs, username=None, start_date=None, end_date=None, show_graph=False, minLength=0):
     '''
     Calc the metrics of how much the entered user has spoken in the chat within the given constraint(if provided)
     '''
-    user_count = find_freq(msgs, username, start_date, end_date)
+    user_count = find_freq(msgs, username, start_date, end_date, minLength)
     total_count = find_msg_count(msgs, start_date, end_date)
 
     print('Total Count: {}\n'.format(total_count))
@@ -341,11 +344,12 @@ The command line options
 @click.option('-p', '--percentage', is_flag=True, help='Show percentage contribution to the chat')
 @click.option('-cS', '--conv-starters', is_flag=True, help='Get the frequecy at which each person has started the conversation')
 @click.option('-u', '--username', nargs=1, type=str, help='Show results for a particular User only (Provide the username)')
+@click.option('-ml', '--minlength', nargs=1, type=int, help='Minumin Msg length')
 @click.option('-c', '--constraint', nargs=2, type=str, help='Add date Constraints (format - mm/dd/yy)')
 @click.option('-a', '--activity', is_flag=True, help='Show hourwise activity of users')
 @click.option('-iC', '--interaction-curve', is_flag=True, help='Tell whether the interaction of the user has increased or decreased')
 @click.option('-sG', '--show-graph', is_flag=True, help='Show graph(s) for the selected options if available')
-def controller(path_to_chatfile, username, percentage, constraint, conv_starters, activity, interaction_curve, show_graph):
+def controller(path_to_chatfile, username, minlength, percentage, constraint, conv_starters, activity, interaction_curve, show_graph):
     msgs = import_data(path_to_chatfile)
     start = time()
     if constraint:
@@ -357,7 +361,7 @@ def controller(path_to_chatfile, username, percentage, constraint, conv_starters
     if conv_starters:
         find_conv_starters(msgs, username)
     if percentage:
-        calc_percentage(msgs, username, start_date, end_date, show_graph)
+        calc_percentage(msgs, username, start_date, end_date, show_graph, minlength)
     if activity:
         check_activity(msgs, username, start_date, end_date, show_graph)
     if interaction_curve:
